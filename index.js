@@ -2,59 +2,51 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-
-const app = express();
-const port = 3000;
-
-app.use(cors());
-app.use(express.json());
-
-
 const session = require('express-session');
 
+const app = express();
+const port = 3500;
 
+// MIDDLEWARE
+app.use(express.json());
 app.use(cors({
-  origin: 'http://127.0.0.1:5500', // SPECIFIČAN URL - ne *
+  origin: ['http://localhost:3500', 'http://127.0.0.1:5500', 'http://localhost:5500'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'user-id']
 }));
 
-
-const provjeriAutentikaciju = (req, res, next) => {
-  if (!req.session.userId) {
-    return res.status(401).send('Nije autorizirano');
-  }
-  next();
-};
 
 app.use(session({
-  secret: 'secretBeyondFocus', // Promijeni u nešto sigurnije
-  resave: false,           // Ne spremaj sesiju ako nije izmijenjena
-  saveUninitialized: false, // Ne spremaj prazne sesije
+  secret: 'secretBeyondFocus',
+  resave: false,
+  saveUninitialized: false,
   cookie: { 
-    secure: false,         // Stavi na true kad koristiš HTTPS
-    maxAge: 24 * 60 * 60 * 1000 // 24 sata
+    secure: false,
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: false
   }
 }));
 
+// MONGODB
 const mongoURI = 'mongodb+srv://rahi:euZh2Zb6@rahi.s2v4ein.mongodb.net/?retryWrites=true&w=majority&appName=Rahi';
 mongoose.connect(mongoURI)
   .then(() => console.log('MongoDB povezan'))
   .catch(err => console.error('MongoDB greška:', err));
 
+// SCHEMA
 const korisnikSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true, trim: true },
-  username: { type: String, required: true, unique: true, trim: true },
+  email: { type: String, required: true, unique: true },
+  username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   coins: { type: Number, default: 0 },
   selectedCharacter: { type: String, default: '' },
-  lastFocusTime: { type: Date, default: null },
-  ownedOutfits: { type: [String], default: [] }
+  ownedOutfits: { type: [String], default: [] },
+  focusStartTime: { type: Date, default: null },
+  focusDuration: { type: Number, default: 0 },
+  isInFocus: { type: Boolean, default: false }
 });
 
-// Prije spremanja hashiraj lozinku
 korisnikSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 10);
@@ -63,42 +55,33 @@ korisnikSchema.pre('save', async function(next) {
 
 const Korisnik = mongoose.model('Korisnik', korisnikSchema);
 
+// MIDDLEWARE
+const provjeriAutentikaciju = (req, res, next) => {
+  const korisnikId = req.headers['user-id'];
+  if (!korisnikId) return res.status(401).send('Nije autorizirano');
+  req.userId = korisnikId;
+  next();
+};
+
+// RUTE
 app.get('/', (req, res) => {
-  res.send('Backend server radi');
+  res.send('Backend radi');
 });
 
 app.post('/register', async (req, res) => {
   try {
     const { email, username, password } = req.body;
-    if (!email || !username || !password)
-      return res.status(400).send('Nedostaju podaci');
+    if (!email || !username || !password) return res.status(400).send('Nedostaju podaci');
 
-    let korisnik = await Korisnik.findOne({ $or: [{ email }, { username }] });
-    if (korisnik) return res.status(400).send('Email ili username već postoji');
+    const postojeci = await Korisnik.findOne({ $or: [{ email }, { username }] });
+    if (postojeci) return res.status(400).send('Korisnik već postoji');
 
-    korisnik = new Korisnik({ email, username, password, selectedCharacter: '' });
+    const korisnik = new Korisnik({ email, username, password });
     await korisnik.save();
-    res.send({ message: 'Korisnik uspješno kreiran', korisnik });
-  } catch (err) {
-    res.status(500).send('Greška na serveru');
-  }
-});
-
-
-app.get('/userdata', provjeriAutentikaciju, async (req, res) => {
-  try {
-    const korisnik = await Korisnik.findById(req.session.userId);
-    if (!korisnik) return res.status(404).send('Korisnik ne postoji');
     
-    res.send({
-      id: korisnik._id,
-      username: korisnik.username,
-      coins: korisnik.coins,
-      selectedCharacter: korisnik.selectedCharacter,
-      ownedOutfits: korisnik.ownedOutfits
-    });
+    res.send({ message: 'Uspješno registriran', korisnik: { id: korisnik._id, username, coins: 0 } });
   } catch (err) {
-    res.status(500).send('Greška na serveru');
+    res.status(500).send('Greška');
   }
 });
 
@@ -111,14 +94,9 @@ app.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, korisnik.password);
     if (!isMatch) return res.status(400).send('Pogrešna lozinka');
 
-    // POSTAVI SESIJU
-    req.session.userId = korisnik._id;
-    req.session.username = korisnik.username;
-
-    // VRATI PODATKE
     res.send({ 
-      message: 'Prijava uspješna',
-      korisnik: {  // KLJUČNO - mora biti "korisnik"!
+      message: 'Uspješna prijava',
+      korisnik: {
         id: korisnik._id,
         username: korisnik.username,
         coins: korisnik.coins,
@@ -127,97 +105,172 @@ app.post('/login', async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).send('Greška na serveru');
+    res.status(500).send('Greška');
+  }
+});
+
+// START FOCUS ENDPOINT
+app.post('/start-focus', async (req, res) => {
+  console.log('Received start-focus request');
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  try {
+    const userId = req.headers['user-id'];
+    if (!userId) {
+      return res.status(401).send('Unauthorized');
+    }
+
+    const { minutes } = req.body;
+    if (!minutes || minutes <= 0) {
+      return res.status(400).send('Invalid duration');
+    }
+
+    console.log(`Starting focus for user ${userId}, duration: ${minutes} minutes`);
+
+    const korisnik = await Korisnik.findById(userId);
+    if (!korisnik) {
+      return res.status(404).send('User not found');
+    }
+
+    // Spremi fokus podatke
+    korisnik.focusStartTime = new Date();
+    korisnik.focusDuration = minutes;
+    korisnik.isInFocus = true;
+    await korisnik.save();
+
+    res.send({ 
+      message: 'Focus started successfully',
+      startTime: korisnik.focusStartTime,
+      duration: minutes
+    });
+
+  } catch (err) {
+    console.error('Start focus error:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+// END FOCUS ENDPOINT
+app.post('/end-focus', async (req, res) => {
+  try {
+    const userId = req.headers['user-id'];
+    if (!userId) {
+      return res.status(401).send('Unauthorized');
+    }
+
+    const korisnik = await Korisnik.findById(userId);
+    if (!korisnik) {
+      return res.status(404).send('User not found');
+    }
+
+    if (!korisnik.isInFocus || !korisnik.focusStartTime) {
+      return res.status(400).send('No active focus session');
+    }
+
+    // Izračunaj stvarno vrijeme
+    const endTime = new Date();
+    const elapsedMs = endTime - korisnik.focusStartTime;
+    const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
+
+    // Izračunaj kovanice (5 kovanica svakih 30 minuta)
+    const periodsOf30Min = Math.floor(elapsedMinutes / 30);
+    const coinsEarned = periodsOf30Min * 5;
+
+    // Ažuriraj korisnika
+    korisnik.coins += coinsEarned;
+    korisnik.isInFocus = false;
+    korisnik.focusStartTime = null;
+    korisnik.focusDuration = 0;
+    await korisnik.save();
+
+    console.log(`Focus ended for user ${userId}. Time: ${elapsedMinutes}min, Coins: ${coinsEarned}`);
+
+    res.send({
+      message: 'Focus session completed',
+      timeSpent: elapsedMinutes,
+      coinsEarned: coinsEarned,
+      totalCoins: korisnik.coins
+    });
+
+  } catch (err) {
+    console.error('End focus error:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+// FOCUS STATUS ENDPOINT
+app.get('/focus-status', async (req, res) => {
+  try {
+    const userId = req.headers['user-id'];
+    if (!userId) {
+      return res.status(401).send('Unauthorized');
+    }
+
+    const korisnik = await Korisnik.findById(userId);
+    if (!korisnik) {
+      return res.status(404).send('User not found');
+    }
+
+    if (!korisnik.isInFocus) {
+      return res.send({ 
+        inFocus: false,
+        message: 'No active focus session'
+      });
+    }
+
+    // Izračunaj preostalo vrijeme
+    const now = new Date();
+    const elapsedMinutes = Math.floor((now - korisnik.focusStartTime) / (1000 * 60));
+    const remainingMinutes = Math.max(0, korisnik.focusDuration - elapsedMinutes);
+
+    res.send({
+      inFocus: true,
+      remainingMinutes: remainingMinutes,
+      elapsedMinutes: elapsedMinutes,
+      totalDuration: korisnik.focusDuration
+    });
+
+  } catch (err) {
+    console.error('Focus status error:', err);
+    res.status(500).send('Server error');
   }
 });
 
 
-
-
-
-app.post('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).send('Greška prilikom odjave');
-    }
-    res.clearCookie('connect.sid'); // Obriši session cookie
-    res.send({ message: 'Odjava uspješna' });
-  });
-});
-
-
-// Ostale postojeće rute (status, update-coins, buy-item) možeš ostaviti kako su
-
-
-// Endpoint za mijenjanje odabranog lika
 app.post('/update-character', provjeriAutentikaciju, async (req, res) => {
-  const { selectedCharacter } = req.body;
   try {
-    const korisnik = await Korisnik.findById(req.session.userId);
-    if (!korisnik) return res.status(404).send('Korisnik ne postoji');
-    
+    const { selectedCharacter } = req.body;
+    const korisnik = await Korisnik.findById(req.userId);
     korisnik.selectedCharacter = selectedCharacter;
     await korisnik.save();
-    
-    res.send({ message: 'Lik ažuriran', selectedCharacter: korisnik.selectedCharacter });
+    res.send({ message: 'Lik ažuriran' });
   } catch (err) {
-    res.status(500).send('Greška na serveru');
+    res.status(500).send('Greška');
   }
 });
 
-// Endpoint za kupovanje/dodavanje outfita
-// U backend dodaj:
 app.post('/buy-outfit', provjeriAutentikaciju, async (req, res) => {
-  const { outfitName, price } = req.body;
   try {
-    const korisnik = await Korisnik.findById(req.session.userId);
-    if (!korisnik) return res.status(404).send('Korisnik ne postoji');
+    const { outfitName, price } = req.body;
+    const korisnik = await Korisnik.findById(req.userId);
     
-    // Provjeri ima li dovoljno kovanica
-    if (korisnik.coins < price) {
-      return res.status(400).send('Nedovoljno kovanica');
-    }
+    if (korisnik.coins < price) return res.status(400).send('Nedovoljno kovanica');
     
-    // Oduzmi kovanice i dodaj outfit
     korisnik.coins -= price;
-    if (!korisnik.ownedOutfits.includes(outfitName)) {
-      korisnik.ownedOutfits.push(outfitName);
-    }
-    
+    korisnik.ownedOutfits.push(outfitName);
     await korisnik.save();
     
-    res.send({ 
-      message: 'Outfit kupljen', 
-      coins: korisnik.coins,
-      ownedOutfits: korisnik.ownedOutfits 
-    });
+    res.send({ message: 'Outfit kupljen', coins: korisnik.coins });
   } catch (err) {
-    res.status(500).send('Greška na serveru');
+    res.status(500).send('Greška');
   }
 });
 
-
-
-
-app.post('/update-coins', async (req, res) => {
-  const { korisnikId, coins } = req.body;
-  if (!korisnikId || typeof coins !== 'number') return res.status(400).send({error: 'Nedostaju podaci'});
-  try {
-    const korisnik = await Korisnik.findById(korisnikId);
-    if (!korisnik) return res.status(404).send({error: 'Korisnik nije pronađen'});
-    korisnik.coins += coins;
-    await korisnik.save();
-    res.send({ message: 'Ažurirano', coins: korisnik.coins });
-  } catch (err) {
-    res.status(500).send({error: 'Greška na serveru'});
-  }
-});
 
 module.exports = app;
 
 if (require.main === module) {
-  app.listen(3000);
+  app.listen(port, () => {
+    console.log(`Server na http://localhost:${port}`);
+  });
 }
-
-
-
