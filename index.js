@@ -29,7 +29,7 @@ app.use(session({
 }));
 
 // MONGODB
-const mongoURI = process.env.MONGODB_URI || 'mongodb+srv://rahi:euZh2Zb6@rahi.s2v4ein.mongodb.net/?retryWrites=true&w=majority&appName=Rahi';
+const mongoURI = 'mongodb+srv://rahi:euZh2Zb6@rahi.s2v4ein.mongodb.net/?retryWrites=true&w=majority&appName=Rahi';
 mongoose.connect(mongoURI)
   .then(() => console.log('MongoDB povezan'))
   .catch(err => console.error('MongoDB greška:', err));
