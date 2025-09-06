@@ -213,9 +213,11 @@ app.post('/update-coins', async (req, res) => {
   }
 });
 
+module.exports = app;
+
+if (require.main === module) {
+  app.listen(3000);
+}
 
 
 
-app.listen(port, () => {
-  console.log(`Server je pokrenut na http://localhost:${port}`);
-});
