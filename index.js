@@ -8,10 +8,10 @@ const app = express();
 const port = process.env.PORT || 3500;
 
 
-// MIDDLEWARE
+
 app.use(express.json());
 app.use(cors({
-  origin: ['http://localhost:3500', 'http://127.0.0.1:5500', 'http://localhost:5500'],
+  origin: ['http://localhost:3500', 'http://127.0.0.1:5500', 'http://localhost:5500', 'https://go-beyond-focus-front.vercel.app'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'user-id']
@@ -29,13 +29,12 @@ app.use(session({
   }
 }));
 
-// MONGODB
 const mongoURI = 'mongodb+srv://rahi:euZh2Zb6@rahi.s2v4ein.mongodb.net/?retryWrites=true&w=majority&appName=Rahi';
 mongoose.connect(mongoURI)
   .then(() => console.log('MongoDB povezan'))
   .catch(err => console.error('MongoDB greška:', err));
 
-// SCHEMA
+
 const korisnikSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   username: { type: String, required: true, unique: true },
@@ -56,7 +55,6 @@ korisnikSchema.pre('save', async function(next) {
 
 const Korisnik = mongoose.model('Korisnik', korisnikSchema);
 
-// MIDDLEWARE
 const provjeriAutentikaciju = (req, res, next) => {
   const korisnikId = req.headers['user-id'];
   if (!korisnikId) return res.status(401).send('Nije autorizirano');
@@ -64,7 +62,6 @@ const provjeriAutentikaciju = (req, res, next) => {
   next();
 };
 
-// RUTE
 app.get('/', (req, res) => {
   res.send('Backend radi');
 });
@@ -110,7 +107,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// START FOCUS ENDPOINT
+
 app.post('/start-focus', async (req, res) => {
   console.log('Received start-focus request');
   console.log('Headers:', req.headers);
@@ -151,7 +148,7 @@ app.post('/start-focus', async (req, res) => {
   }
 });
 
-// END FOCUS ENDPOINT
+
 app.post('/end-focus', async (req, res) => {
   try {
     const userId = req.headers['user-id'];
@@ -173,11 +170,11 @@ app.post('/end-focus', async (req, res) => {
     const elapsedMs = endTime - korisnik.focusStartTime;
     const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
 
-    // Izračunaj kovanice (5 kovanica svakih 30 minuta)
+
     const periodsOf30Min = Math.floor(elapsedMinutes / 30);
     const coinsEarned = periodsOf30Min * 5;
 
-    // Ažuriraj korisnika
+ 
     korisnik.coins += coinsEarned;
     korisnik.isInFocus = false;
     korisnik.focusStartTime = null;
@@ -199,7 +196,7 @@ app.post('/end-focus', async (req, res) => {
   }
 });
 
-// FOCUS STATUS ENDPOINT
+
 app.get('/focus-status', async (req, res) => {
   try {
     const userId = req.headers['user-id'];
@@ -219,7 +216,7 @@ app.get('/focus-status', async (req, res) => {
       });
     }
 
-    // Izračunaj preostalo vrijeme
+  
     const now = new Date();
     const elapsedMinutes = Math.floor((now - korisnik.focusStartTime) / (1000 * 60));
     const remainingMinutes = Math.max(0, korisnik.focusDuration - elapsedMinutes);
@@ -275,3 +272,4 @@ if (require.main === module) {
     console.log(`Server na http://localhost:${port}`);
   });
 }
+
