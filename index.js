@@ -23,11 +23,13 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: false,
+    secure: process.env.NODE_ENV === 'production', // ✅ Dinamicki postavlja HTTPS
     maxAge: 24 * 60 * 60 * 1000,
-    httpOnly: false
+    httpOnly: true, // ✅ Sigurniji
+    sameSite: 'none' // ✅ Za cross-domain requests
   }
 }));
+
 
 const mongoURI = 'mongodb+srv://rahi:euZh2Zb6@rahi.s2v4ein.mongodb.net/?retryWrites=true&w=majority&appName=Rahi';
 mongoose.connect(mongoURI)
@@ -46,6 +48,26 @@ const korisnikSchema = new mongoose.Schema({
   focusDuration: { type: Number, default: 0 },
   isInFocus: { type: Boolean, default: false }
 });
+
+app.get('/userdata', provjeriAutentikaciju, async (req, res) => {
+  try {
+    const korisnik = await Korisnik.findById(req.userId);
+    if (!korisnik) {
+      return res.status(404).send('User not found');
+    }
+    
+    res.send({
+      id: korisnik._id,
+      username: korisnik.username,
+      coins: korisnik.coins,
+      selectedCharacter: korisnik.selectedCharacter,
+      ownedOutfits: korisnik.ownedOutfits
+    });
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
+
 
 korisnikSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
@@ -272,5 +294,6 @@ if (require.main === module) {
     console.log(`Server na http://localhost:${port}`);
   });
 }
+
 
 
