@@ -5,7 +5,8 @@ const bcrypt = require('bcrypt');
 const session = require('express-session');
 
 const app = express();
-const port = 3500;
+const port = process.env.PORT || 3500;
+
 
 // MIDDLEWARE
 app.use(express.json());
