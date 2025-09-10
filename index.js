@@ -26,7 +26,7 @@ app.use(session({
     secure: process.env.NODE_ENV === 'production', // ✅ Dinamicki postavlja HTTPS
     maxAge: 24 * 60 * 60 * 1000,
     httpOnly: true, // ✅ Sigurniji
-    sameSite: 'none' // ✅ Za cross-domain requests
+    sameSite: 'lax' // ✅ Za cross-domain requests
   }
 }));
 
@@ -269,6 +269,23 @@ app.post('/update-character', provjeriAutentikaciju, async (req, res) => {
   }
 });
 
+
+app.post('/update-coins', async (req, res) => {
+  try {
+    const { korisnikId, coins } = req.body;
+    const korisnik = await Korisnik.findById(korisnikId);
+    if (!korisnik) return res.status(404).send('User not found');
+    
+    korisnik.coins += coins;
+    await korisnik.save();
+    
+    res.send({ coins: korisnik.coins });
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
+
+
 app.post('/buy-outfit', provjeriAutentikaciju, async (req, res) => {
   try {
     const { outfitName, price } = req.body;
@@ -294,6 +311,7 @@ if (require.main === module) {
     console.log(`Server na http://localhost:${port}`);
   });
 }
+
 
 
 
