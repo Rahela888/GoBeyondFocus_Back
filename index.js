@@ -21,7 +21,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'user-id']
 }));
 
-app.options('*', cors());
+
 
 app.use(session({
   secret: 'secretBeyondFocus',
@@ -254,6 +254,7 @@ if (require.main === module) {
     console.log('Server na http://localhost:' + port);
   });
 }
+
 
 
 
