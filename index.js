@@ -11,7 +11,7 @@ const port = process.env.PORT || 3500;
 
 app.use(express.json());
 app.use(cors({
-  origin: ['http://localhost:3500', 'http://127.0.0.1:5500', 'http://localhost:5500', 'go-beyond-focus-front.vercel.app'],
+  origin: ['http://localhost:3500', 'http://127.0.0.1:5500', 'http://localhost:5500', 'https://go-beyond-focus-front.vercel.app'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'user-id']
@@ -311,6 +311,7 @@ if (require.main === module) {
     console.log(`Server na http://localhost:${port}`);
   });
 }
+
 
 
 
