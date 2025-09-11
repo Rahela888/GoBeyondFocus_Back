@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const session = require('express-session');
 const app = express();
 const port = process.env.PORT || 3500;
+
 app.use(express.json());
 
 app.use(cors({
@@ -12,28 +13,33 @@ app.use(cors({
     'http://localhost:3500', 
     'http://127.0.0.1:5500', 
     'http://localhost:5500', 
-    'https://go-beyond-focus-front.vercel.app' // ✅ SAMO DODAJ https://
+    'https://go-beyond-focus-front.vercel.app'
   ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'user-id']
 }));
+
+app.options('*', cors());
 
 app.use(session({
   secret: 'secretBeyondFocus',
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production', // ✅ Dinamicki postavlja HTTPS
+    secure: process.env.NODE_ENV === 'production',
     maxAge: 24 * 60 * 60 * 1000,
-    httpOnly: true, // ✅ Sigurniji
-    sameSite: 'lax' // ✅ Za cross-domain requests
+    httpOnly: true,
+    sameSite: 'lax'
   }
 }));
+
 const mongoURI = 'mongodb+srv://rahi:euZh2Zb6@rahi.s2v4ein.mongodb.net/?retryWrites=true&w=majority&appName=Rahi';
+
 mongoose.connect(mongoURI)
   .then(() => console.log('MongoDB povezan'))
   .catch(err => console.error('MongoDB greška:', err));
+
 const korisnikSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   username: { type: String, required: true, unique: true },
@@ -45,6 +51,26 @@ const korisnikSchema = new mongoose.Schema({
   focusDuration: { type: Number, default: 0 },
   isInFocus: { type: Boolean, default: false }
 });
+
+korisnikSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+
+const Korisnik = mongoose.model('Korisnik', korisnikSchema);
+
+const provjeriAutentikaciju = (req, res, next) => {
+  const korisnikId = req.headers['user-id'];
+  if (!korisnikId) return res.status(401).send('Nije autorizirano');
+  req.userId = korisnikId;
+  next();
+};
+
+app.get('/', (req, res) => {
+  res.send('Backend radi');
+});
+
 app.get('/userdata', provjeriAutentikaciju, async (req, res) => {
   try {
     const korisnik = await Korisnik.findById(req.userId);
@@ -63,21 +89,7 @@ app.get('/userdata', provjeriAutentikaciju, async (req, res) => {
     res.status(500).send('Server error');
   }
 });
-korisnikSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 10);
-  next();
-});
-const Korisnik = mongoose.model('Korisnik', korisnikSchema);
-const provjeriAutentikaciju = (req, res, next) => {
-  const korisnikId = req.headers['user-id'];
-  if (!korisnikId) return res.status(401).send('Nije autorizirano');
-  req.userId = korisnikId;
-  next();
-};
-app.get('/', (req, res) => {
-  res.send('Backend radi');
-});
+
 app.post('/register', async (req, res) => {
   try {
     const { email, username, password } = req.body;
@@ -92,6 +104,7 @@ app.post('/register', async (req, res) => {
     res.status(500).send('Greška');
   }
 });
+
 app.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -113,6 +126,7 @@ app.post('/login', async (req, res) => {
     res.status(500).send('Greška');
   }
 });
+
 app.post('/start-focus', async (req, res) => {
   console.log('Received start-focus request');
   console.log('Headers:', req.headers);
@@ -131,7 +145,7 @@ app.post('/start-focus', async (req, res) => {
     if (!korisnik) {
       return res.status(404).send('User not found');
     }
-    // Spremi fokus podatke
+    
     korisnik.focusStartTime = new Date();
     korisnik.focusDuration = minutes;
     korisnik.isInFocus = true;
@@ -146,6 +160,7 @@ app.post('/start-focus', async (req, res) => {
     res.status(500).send('Server error');
   }
 });
+
 app.post('/end-focus', async (req, res) => {
   try {
     const userId = req.headers['user-id'];
@@ -159,7 +174,7 @@ app.post('/end-focus', async (req, res) => {
     if (!korisnik.isInFocus || !korisnik.focusStartTime) {
       return res.status(400).send('No active focus session');
     }
-    // Izračunaj stvarno vrijeme
+    
     const endTime = new Date();
     const elapsedMs = endTime - korisnik.focusStartTime;
     const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
@@ -182,6 +197,7 @@ app.post('/end-focus', async (req, res) => {
     res.status(500).send('Server error');
   }
 });
+
 app.get('/focus-status', async (req, res) => {
   try {
     const userId = req.headers['user-id'];
@@ -212,6 +228,7 @@ app.get('/focus-status', async (req, res) => {
     res.status(500).send('Server error');
   }
 });
+
 app.post('/update-character', provjeriAutentikaciju, async (req, res) => {
   try {
     const { selectedCharacter } = req.body;
@@ -223,6 +240,7 @@ app.post('/update-character', provjeriAutentikaciju, async (req, res) => {
     res.status(500).send('Greška');
   }
 });
+
 app.post('/update-coins', async (req, res) => {
   try {
     const { korisnikId, coins } = req.body;
@@ -237,6 +255,7 @@ app.post('/update-coins', async (req, res) => {
     res.status(500).send('Server error');
   }
 });
+
 app.post('/buy-outfit', provjeriAutentikaciju, async (req, res) => {
   try {
     const { outfitName, price } = req.body;
@@ -253,12 +272,16 @@ app.post('/buy-outfit', provjeriAutentikaciju, async (req, res) => {
     res.status(500).send('Greška');
   }
 });
+
 module.exports = app;
+
 if (require.main === module) {
   app.listen(port, () => {
     console.log(`Server na http://localhost:${port}`);
   });
 }
+
+
 
 
 
