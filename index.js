@@ -60,7 +60,7 @@ korisnikSchema.pre('save', async function(next) {
 
 const Korisnik = mongoose.model('Korisnik', korisnikSchema);
 
-// ✅ PREMJESTI OVU FUNKCIJU OVDJE - PRIJE KORIŠTENJA!
+
 const provjeriAutentikaciju = (req, res, next) => {
   const korisnikId = req.headers['user-id'];
   if (!korisnikId) return res.status(401).send('Nije autorizirano');
@@ -72,7 +72,7 @@ app.get('/', (req, res) => {
   res.send('Backend radi');
 });
 
-// SAD MOŽEŠ KORISTITI provjeriAutentikaciju
+
 app.get('/userdata', provjeriAutentikaciju, async (req, res) => {
   try {
     const korisnik = await Korisnik.findById(req.userId);
@@ -92,7 +92,7 @@ app.get('/userdata', provjeriAutentikaciju, async (req, res) => {
   }
 });
 
-// Ostatak koda ostaje isti...
+
 app.post('/register', async (req, res) => {
   try {
     const { email, username, password } = req.body;
@@ -234,6 +234,7 @@ app.post('/buy-outfit', provjeriAutentikaciju, async (req, res) => {
 app.listen(port, () => {
   console.log(`Server na http://localhost:${port}`);
 });
+
 
 
 
